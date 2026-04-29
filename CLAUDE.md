@@ -108,9 +108,10 @@ setup.cfg                  # flake8, isort, coverage config
 
 ### Prerequisites
 - Python 3.11+
+- Node.js 20+
 - Docker & Docker Compose (for local Postgres/Redis)
 
-### First-time setup
+### Backend (Django)
 
 ```bash
 python -m venv .venv
@@ -122,7 +123,19 @@ make migrate          # run database migrations
 make run              # start dev server on :8000
 ```
 
+### Frontend (React SPA)
+
+```bash
+cd frontend
+npm install
+npm run dev           # starts on http://localhost:5173 (proxies /api → :8000)
+```
+
+Both servers must run simultaneously. The Vite dev server proxies all `/api/*` requests to Django.
+
 ## Key Commands
+
+### Backend (run from repo root)
 
 | Command | Description |
 |---|---|
@@ -137,6 +150,15 @@ make run              # start dev server on :8000
 | `make db-up` | Start Docker services (Postgres, Redis) |
 | `make db-down` | Stop Docker services |
 | `make shell` | Django shell (`manage.py shell_plus`) |
+
+### Frontend (run from `frontend/`)
+
+| Command | Description |
+|---|---|
+| `npm install` | Install dependencies |
+| `npm run dev` | Start Vite dev server on :5173 |
+| `npm run build` | Production build to `frontend/dist/` |
+| `npm run preview` | Preview production build |
 
 ## Code Conventions
 
@@ -210,6 +232,44 @@ Copy `.env.example` to `.env` (never commit `.env`).
 - **Claude AI branches**: `claude/<description>` (auto-created by Claude Code)
 - **Commit messages**: imperative mood, present tense (`Add profile serializer`, not `Added`)
 - **PR requirement**: all changes via pull request; squash-merge preferred
+
+## Frontend Structure
+
+```
+frontend/
+  src/
+    api/
+      client.ts          # Axios instance, base URL /api, error normalisation
+      profiles.ts        # Profile CRUD
+      tailoring.ts       # Tailor, list/get versions, finalize, export (blob)
+      applications.ts    # List, get, update status
+    components/
+      Navbar.tsx
+      Badge.tsx / LoadingSpinner.tsx / ErrorAlert.tsx
+      TextDiffViewer.tsx   # Unified diff with +/- line rendering
+      SkillsDiffViewer.tsx # Skill tags: red=removed, gray=unchanged, green=added
+      BulletsDiffViewer.tsx# Bullet list with inline diff colouring
+    pages/
+      ProfilesPage.tsx     # Profile card grid + create button
+      ProfileFormPage.tsx  # Structured form → POST /api/profiles/
+      TailorPage.tsx       # JD textarea + company/title → POST /tailor/
+      DiffReviewPage.tsx   # Two-column: diff (left) | editable final (right)
+      ApplicationsPage.tsx # Table with inline status/notes editing
+    types/api.ts           # TypeScript interfaces for all API shapes
+    App.tsx                # BrowserRouter + all routes
+    main.tsx / index.css
+  package.json / vite.config.ts / tailwind.config.js / tsconfig.json
+```
+
+### Routes
+
+| Path | Page |
+|---|---|
+| `/profiles` | Profile card grid |
+| `/profiles/new` | Create profile form |
+| `/profiles/:id/tailor` | JD input → trigger Claude |
+| `/profiles/:id/versions/:vid/review` | Diff review + inline edit + export |
+| `/applications` | Application tracker table |
 
 ## AI Assistant Guidelines
 
