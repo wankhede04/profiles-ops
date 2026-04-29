@@ -104,7 +104,40 @@ pytest.ini
 setup.cfg                  # flake8, isort, coverage config
 ```
 
-## Development Setup
+## Running with Docker (recommended)
+
+```bash
+cp .env.example .env        # set SECRET_KEY and ANTHROPIC_API_KEY
+# Set DATABASE_URL=postgres://profiles:profiles@db:5432/profiles_ops in .env
+make docker-build           # builds backend + frontend images
+make docker-up              # starts all 4 services; app on http://localhost:80
+```
+
+Services started by `docker compose up`:
+| Service | Image | Role |
+|---|---|---|
+| `db` | postgres:16-alpine | PostgreSQL with health-check |
+| `redis` | redis:7-alpine | Redis (cache / future Celery) |
+| `backend` | local build | Django + Gunicorn on port 8000 (internal only) |
+| `frontend` | local build | React SPA + nginx on port 80 (public) |
+
+The `backend` entrypoint waits for Postgres to be healthy, then runs `manage.py migrate` automatically before starting Gunicorn.
+
+nginx routes:
+- `/api/*`, `/admin/*`, `/static/*` → proxy to `backend:8000`
+- everything else → React SPA (`index.html` for client-side routing)
+
+### Useful Docker commands
+```bash
+make docker-logs      # tail all service logs
+make docker-shell     # Django shell inside backend container
+make docker-migrate   # run manage.py migrate inside backend container
+make docker-down      # stop and remove containers
+```
+
+---
+
+## Development Setup (without Docker)
 
 ### Prerequisites
 - Python 3.11+

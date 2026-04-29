@@ -1,4 +1,5 @@
-.PHONY: install run migrate migrations test test-fast lint fmt db-up db-down shell coverage
+.PHONY: install run migrate migrations test test-fast lint fmt db-up db-down shell coverage \
+        docker-build docker-up docker-up-d docker-down docker-logs docker-shell docker-migrate
 
 install:
 	pip install -r requirements/dev.txt
@@ -35,3 +36,26 @@ shell:
 
 coverage:
 	coverage run -m pytest && coverage report --fail-under=80
+
+# ── Docker ────────────────────────────────────────────────────────────────────
+
+docker-build:
+	docker compose build
+
+docker-up:
+	docker compose up
+
+docker-up-d:
+	docker compose up -d
+
+docker-down:
+	docker compose down
+
+docker-logs:
+	docker compose logs -f
+
+docker-shell:
+	docker compose exec backend python manage.py shell
+
+docker-migrate:
+	docker compose exec backend python manage.py migrate

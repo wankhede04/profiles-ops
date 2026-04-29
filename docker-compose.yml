@@ -1,21 +1,61 @@
 version: "3.9"
 
 services:
+
+  # ── Database ───────────────────────────────────────────────────────────────
   db:
     image: postgres:16-alpine
+    restart: unless-stopped
     environment:
       POSTGRES_DB: profiles_ops
       POSTGRES_USER: profiles
       POSTGRES_PASSWORD: profiles
-    ports:
-      - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U profiles -d profiles_ops"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
+  # ── Cache ──────────────────────────────────────────────────────────────────
   redis:
     image: redis:7-alpine
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # ── Django / Gunicorn ──────────────────────────────────────────────────────
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file: .env
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - media_files:/app/media
+    expose:
+      - "8000"
+
+  # ── React SPA + nginx reverse proxy ───────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    restart: unless-stopped
     ports:
-      - "6379:6379"
+      - "80:80"
+    depends_on:
+      - backend
 
 volumes:
   postgres_data:
+  media_files:
