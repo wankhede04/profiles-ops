@@ -4,38 +4,104 @@ This file is the primary reference for AI assistants (Claude) working in this re
 
 ## Project Overview
 
-**profiles-ops** is a Python/Django REST API service for profile management operations. It handles CRUD operations and business logic around user/entity profiles.
+**profiles-ops** is an AI-powered resume tailoring and job application tracking service.
 
-> Update this section with architecture details, external integrations, and service boundaries as the project matures.
+Core capabilities:
+1. **Profile Store** — each profile has `locked_data` (name, contact, education — AI never modifies) and `editable_data` (summary, skills, experience bullets, projects — AI rewrites per JD).
+2. **JD-Driven Tailoring** — paste a job description → Claude tailors `editable_data` → field-level diff is computed and stored as a version snapshot.
+3. **Diff Review** — the API returns a structured git-diff-style diff (unchanged / removed / added lines per field) for frontend rendering.
+4. **Finalize & Export** — sales team can POST manually-edited JSON, then export to a styled PDF (WeasyPrint).
+5. **Application Tracker** — every exported resume is logged with job/company/date/PDF path and status workflow (applied → interviewing → offered/rejected/withdrawn).
+
+### JSON Schema
+
+```json
+{
+  "locked_data": {
+    "name": "...",
+    "contact": { "email": "...", "phone": "...", "location": "...", "linkedin": "...", "github": "..." },
+    "education": [{ "degree": "...", "institution": "...", "year": "..." }]
+  },
+  "editable_data": {
+    "summary": "...",
+    "skills": ["Python", "Django"],
+    "experience": [{ "company": "...", "role": "...", "start_date": "...", "end_date": "...", "bullets": ["..."] }],
+    "projects": [{ "name": "...", "description": "...", "tech_stack": "...", "bullets": ["..."] }]
+  }
+}
+```
+
+### API Endpoints
+
+| Method | Path | Description |
+|---|---|---|
+| `GET/POST` | `/api/profiles/` | List / create profiles |
+| `GET/PUT/PATCH/DELETE` | `/api/profiles/{profile_id}/` | Retrieve / update / delete |
+| `POST` | `/api/profiles/{profile_id}/tailor/` | Tailor to JD; returns version with diff |
+| `GET` | `/api/profiles/{profile_id}/versions/` | List versions for a profile |
+| `GET` | `/api/profiles/{profile_id}/versions/{id}/` | Version detail with diff_snapshot |
+| `POST` | `/api/profiles/{profile_id}/versions/{id}/finalize/` | Save manually-edited JSON |
+| `POST` | `/api/profiles/{profile_id}/versions/{id}/export/` | Generate PDF, log application, stream file |
+| `GET` | `/api/applications/` | All tracked applications |
+| `GET` | `/api/applications/{id}/` | Application detail (includes diff_snapshot) |
+| `PATCH` | `/api/applications/{id}/status/` | Update status + notes |
 
 ## Repository Structure
 
 ```
-profiles_ops/          # Django project package
+profiles_ops/              # Django project package
   settings/
-    base.py            # Shared settings
-    dev.py             # Development overrides
-    prod.py            # Production overrides
-  urls.py              # Root URL configuration
-  wsgi.py
-  asgi.py
-apps/                  # Django applications (one per domain)
-  profiles/            # Core profiles domain
-    models.py
-    views.py
-    serializers.py
+    base.py                # Shared settings (reads from .env via django-environ)
+    dev.py                 # Development overrides (BrowsableAPI enabled)
+    prod.py                # Production overrides (security headers)
+  urls.py                  # Root URL config — mounts /api/profiles/ and /api/applications/
+  wsgi.py / asgi.py
+apps/
+  profiles/                # Profile CRUD domain
+    models.py              # Profile (locked_data + editable_data JSONFields)
+    serializers.py         # Validates required keys in locked/editable data
+    views.py               # ProfileViewSet (full CRUD, lookup_field=profile_id)
+    urls.py                # Also mounts tailoring + export routes under /<profile_id>/
+    admin.py
+    migrations/
+    tests/
+      factories.py         # ProfileFactory (factory_boy)
+      test_views.py        # Profile CRUD API tests
+  tailoring/               # JD tailoring, diff, PDF export domain
+    models.py              # ProfileVersion (status: draft→reviewed→exported)
+    serializers.py         # ProfileVersionSerializer, TailorRequestSerializer, FinalizeRequestSerializer
+    views.py               # TailorView, VersionListView, VersionDetailView, FinalizeView, ExportView
+    services/
+      claude_service.py    # Calls Anthropic API; returns modified editable JSON
+      diff_service.py      # Field-level diff: text hunks, list sets, bullet sequences
+      pdf_service.py       # Jinja2 → WeasyPrint → PDF file
+    templates/
+      tailoring/
+        resume.html        # Professional resume HTML template
+    migrations/
+    tests/
+      factories.py         # ProfileVersionFactory
+      test_diff_service.py # Unit tests for diff logic (no DB, no API calls)
+  applications/            # Application tracker domain
+    models.py              # Application (OneToOne → ProfileVersion, status workflow)
+    serializers.py         # ApplicationSerializer (embeds diff_snapshot), ApplicationStatusSerializer
+    views.py               # ApplicationViewSet (list, retrieve) + /status/ PATCH action
     urls.py
     admin.py
+    migrations/
     tests/
-tests/                 # Integration and cross-app tests
+      test_views.py        # Application list, retrieve, status update tests
 requirements/
-  base.txt             # Production dependencies (pinned)
-  dev.txt              # Dev/test extras
-  prod.txt             # Production extras
+  base.txt                 # Pinned production deps
+  dev.txt                  # + pytest, factory-boy, black, flake8, isort, coverage
+  prod.txt                 # + gunicorn
 manage.py
-Makefile               # Developer shortcuts
-docker-compose.yml     # Local dev stack (Postgres, Redis)
-.env.example           # Required environment variable template
+Makefile
+docker-compose.yml         # Postgres 16 + Redis 7
+.env.example
+conftest.py                # Shared pytest fixtures: locked_data, editable_data
+pytest.ini
+setup.cfg                  # flake8, isort, coverage config
 ```
 
 ## Development Setup
