@@ -1,0 +1,98 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+
+  # ── Backend lint ────────────────────────────────────────────────────────────
+  backend-lint:
+    name: Backend — Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements/dev.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements/dev.txt
+
+      - name: flake8
+        run: flake8 .
+
+      - name: isort
+        run: isort --check-only .
+
+  # ── Backend tests ───────────────────────────────────────────────────────────
+  backend-test:
+    name: Backend — Test
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: profiles_ops
+          POSTGRES_USER: profiles
+          POSTGRES_PASSWORD: profiles
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U profiles -d profiles_ops"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      SECRET_KEY: "ci-test-secret-key-not-used-in-production"
+      DATABASE_URL: "postgres://profiles:profiles@localhost:5432/profiles_ops"
+      DJANGO_SETTINGS_MODULE: "profiles_ops.settings.dev"
+      ANTHROPIC_API_KEY: ""
+      ALLOWED_HOSTS: "localhost,127.0.0.1"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements/dev.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements/dev.txt
+
+      - name: Run tests
+        run: pytest --tb=short
+
+      - name: Check coverage threshold
+        run: coverage run -m pytest && coverage report --fail-under=80
+
+  # ── Frontend build ──────────────────────────────────────────────────────────
+  frontend-build:
+    name: Frontend — Build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type-check and build
+        run: npm run build

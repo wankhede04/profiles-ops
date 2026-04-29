@@ -30,6 +30,7 @@ services:
 
   # ── Django / Gunicorn ──────────────────────────────────────────────────────
   backend:
+    image: ghcr.io/wankhede04/profiles-ops/backend:latest
     build:
       context: .
       dockerfile: Dockerfile
@@ -47,6 +48,7 @@ services:
 
   # ── React SPA + nginx reverse proxy ───────────────────────────────────────
   frontend:
+    image: ghcr.io/wankhede04/profiles-ops/frontend:latest
     build:
       context: ./frontend
       dockerfile: Dockerfile

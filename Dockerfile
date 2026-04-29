@@ -23,6 +23,12 @@ ENV DJANGO_SETTINGS_MODULE=profiles_ops.settings.prod \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
+# SECRET_KEY is required by Django settings at import time.
+# The build-arg value is only used during collectstatic; the real key
+# is injected at runtime via env_file and overrides this placeholder.
+ARG SECRET_KEY=build-time-placeholder-not-used-at-runtime
+ENV SECRET_KEY=${SECRET_KEY}
+
 RUN python manage.py collectstatic --noinput
 
 RUN chmod +x docker-entrypoint.sh

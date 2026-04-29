@@ -304,6 +304,42 @@ frontend/
 | `/profiles/:id/versions/:vid/review` | Diff review + inline edit + export |
 | `/applications` | Application tracker table |
 
+## CI/CD (GitHub Actions)
+
+Two workflows live in `.github/workflows/`:
+
+### `ci.yml` — runs on every push and pull request
+| Job | What it does |
+|---|---|
+| `backend-lint` | `flake8 .` + `isort --check-only .` |
+| `backend-test` | Spins up a postgres:16 service container, runs `pytest` + `coverage report --fail-under=80` |
+| `frontend-build` | `npm ci` + `npm run build` (fails on TypeScript errors) |
+
+No secrets needed — CI uses safe hardcoded test values for `SECRET_KEY` and `DATABASE_URL`.
+
+### `cd.yml` — runs on push to `main` only
+Builds both Docker images with BuildKit layer caching and pushes to GitHub Container Registry:
+- `ghcr.io/wankhede04/profiles-ops/backend:latest` + `:<sha>`
+- `ghcr.io/wankhede04/profiles-ops/frontend:latest` + `:<sha>`
+
+Uses the auto-provided `GITHUB_TOKEN` — no extra secrets required.
+
+**One-time repo setup:** Go to *Settings → Actions → General → Workflow permissions* and set to **Read and write** (allows pushing to ghcr.io).
+
+### Pulling and running published images
+On any Docker host:
+```bash
+cp .env.example .env   # fill SECRET_KEY, ANTHROPIC_API_KEY, DATABASE_URL (pointing to db service)
+docker compose pull    # pulls ghcr.io images
+docker compose up -d   # starts all 4 services
+```
+
+For local dev (build from source instead of pulling):
+```bash
+make docker-build      # builds locally
+make docker-up         # starts stack
+```
+
 ## AI Assistant Guidelines
 
 These rules apply specifically to Claude and other AI assistants working in this repo:
